@@ -11,76 +11,36 @@ import Combine
 import CoreImage
 
 protocol VideoProcessingChainDelegate: AnyObject {
-    /// Informs the delegate when Vision analyzes an image in the frame chain.
-    /// - Parameters:
-    ///   - chain: A video-processing chain.
-    ///   - poses: An array of poses.
-    ///   - frame: A `CGImage` of the frame.
+
     func videoProcessingChain(_ chain: VideoProcessingChain,
                               didDetect poses: [Pose]?,
                               in frame: CGImage)
-
-    /// Informs the delegate when a video frame chain predicts an action.
-    /// - Parameters:
-    ///   - chain: A video-processing chain.
-    ///   - actionPrediction: An action prediction.
-    ///   - duration: The span of time the prediction represents.
     func videoProcessingChain(_ chain: VideoProcessingChain,
                               didPredict actionPrediction: ActionPrediction,
                               for frames: Int)
 }
 
-/// Builds a chain of Combine publishers / subscribers from the upstream frame
-/// (sample buffer) publisher.
-/// - Tag: VideoProcessingChain
 struct VideoProcessingChain {
-    /// The video-processing chain's delegate.
-    ///
-    /// Set this property to receive poses and action predictions.
-    /// - Tag: delegate-VideoProcessingChain
+
     weak var delegate: VideoProcessingChainDelegate?
 
-    /// The upstream frame publisher.
-    ///
-    /// Set this property to begin extracting poses and predicting actions.
-    /// - Tag: upstreamFramePublisher
     var upstreamFramePublisher: AnyPublisher<Frame, Never>! {
         didSet { buildProcessingChain() }
     }
 
-    /// A cancellation token for the active video-processing chain.
-    ///
-    /// To tear down the frame processing chain, call this property's `cancel()`
-    /// method, or allow it to deinitialize.
     private var frameProcessingChain: AnyCancellable?
 
-    /// A human body pose request instance that finds poses in each video frame.
-    ///
-    /// The video-processing chain reuses this instance for all frames from any
-    /// upstream publisher.
-    /// - Tag: humanBodyPoseRequest
+
     private let humanBodyPoseRequest = VNDetectHumanBodyPoseRequest()
 
-    /// The action classifier that recognizes exercise activities.
+    
     private let actionClassifier = ExerciseClassifier.shared
 
-    /// The number of pose data instances the action classifier needs
-    /// to make a prediction.
-    /// - Tag: predictionWindowSize
+   
     private let predictionWindowSize: Int
 
-    /// The number of pose data instances the window advances after each
-    /// prediction.
-    ///
-    /// Increase the stride's value to make predictions less frequently.
-    /// - Tag: windowStride
     private let windowStride = 10
 
-    /// A performance reporter that logs the number of predictions and frames
-    /// that pass through the chain.
-    ///
-    /// The reporter prints the prediction and frame counts to the console
-    /// every second.
     private var performanceReporter = PerformanceReporter()
 
     init() {
@@ -90,19 +50,7 @@ struct VideoProcessingChain {
 
 // MARK: - Combine Chain Builder
 extension VideoProcessingChain {
-    /// Clears and (re)builds a series of Combine publishers that subscribes to
-    /// a video frame publisher and generates action predictions.
-    ///
-    /// The chain starts with the `upstreamFramePublisher` property and daisy-
-    /// chains additional publishers that each subscribe to their upstream publisher.
-    /// Each publisher in the chain transforms its input into an output
-    /// it publishes to the next publisher in the chain.
-    ///
-    /// The last publisher in the chain generates action predictions.
-    /// The final entity in the chain is a subscriber that receives action
-    /// predictions and relays them to the video-processing chain's delegate by
-    /// calling its `sendPrediction(_:)`method.
-    /// - Tag: buildProcessingChain
+
     private mutating func buildProcessingChain() {
         // Only continue with a valid upstream frame publisher.
         guard upstreamFramePublisher != nil else { return }
